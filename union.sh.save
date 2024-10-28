@@ -1,0 +1,126 @@
+#!/bin/bash -x
+
+# Nombre script: Union.sh
+# Descripción: Script creado por y para la utilización de la configuración y agregación de un cliente a un servidor OPEN Ldap
+# Autor: Miguel Hernández Andreu
+# Fecha creación: 14/10/24
+# Fecha finalización: */10/24
+
+# Definición de colores para echo
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+RESET='\033[0m'
+
+# Variables de configuración
+
+# Variables para libnss-ldap
+IPServerLDAP="ldap://192.168.1.100"
+serverBase="dc=MAIKEL,dc=local"
+DNserver="cn=admin,dc=MAIKEL,dc=local"
+LDAPVersion="3"
+passwd="Micasa123"
+LDAPassHsh="md5"
+varlibconf="/etc/ldap/ldap.conf"
+
+# Variables para nsswitch.conf
+compatldap="compat ldap"
+nssconf="/etc/nsswitch.conf"
+
+# Variables para libpam-ldap
+authpam="auth    sufficient                       pam_ldap.so"
+accpam="account sufficient                         pam_ldap.so"
+sspam="session required   pam_mkhomedir.so skel=/etc/skel umask=0077"
+passpam="password sufficient                       pam_ldap.so"
+
+# ---------------------------------------------
+
+# Preconfiguración de las librerias con debconf
+
+# Preconfiguración de libnss-ldap
+
+echo -e  "${CYAN}libnss-ldap libnss-ldap/ldap-server string $IPServerLDAP" | sudo debconf-set-selections
+echo -e  "RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+RESET='\033[0m' 
+libnss-ldap libnss-ldap/base-dn string $serverBase" | sudo debconf-set-selections
+echo -e  "libnss-ldap libnss-ldap/binddn string $DNserver" | sudo debconf-set-selections
+echo -e  "libnss-ldap libnss-ldap/bindpw password $passwd" | sudo debconf-set-selections
+echo -e  "libnss-ldap libnss-ldap/rootbinddn string $DNserver" | sudo debconf-set-selections
+echo -e  "libnss-ldap libnss-ldap/dblogin boolean false" | sudo debconf-set-selections
+echo -e  "libnss-ldap libnss-ldap/ldap_version select $LDAPVersion" | sudo debconf-set-selections
+
+# Preconfiguración de ldap-utils
+
+echo "ldap-utils ldap-utils/ldap-server string $IPServerLDAP" | sudo debconf-set-selections
+echo "ldap-utils ldap-utils/ldap-base string $serverBase" | sudo debconf-set-selections
+
+# Puesta a punto de nuestro cliente
+
+echo "Actualizando y mejorando repositorios"
+echo "Espere porfavor..."
+
+sudo apt update && sudo apt upgrade -yy
+
+echo "Instalando librerias y dependencias necesarias"
+echo "Espere porfavor..."
+
+
+# Instalación de librerias
+
+sudo DEBIAN_FRONTEND=noninteractive apt install libnss-ldap libpam-ldap ldap-utils -yy
+
+# Configuración de archivos
+
+# Configuración de ldap.conf
+
+sudo sed -i '/^#BASE/s/^#//;s/dc=example,dc=com/'"$serverBase"'/' "$varlibconf"
+sudo sed -i '/^#URI/s/^#//;s|URI.*|URI  '"$IPServerLDAP"'|' "$varlibconf"
+
+# Comprobar si la línea LDAP_VERSION existe, si no añadirla
+
+if ! grep -q "^LDAP_VERSION" "$varlibconf"; then
+sudo sed -i '/^URI/a LDAP_VERSION 3' "$varlibconf"
+fi
+
+# Configuración archivos PAM
+#  Auth
+echo $authpam | sudo tee -a /etc/pam.d/common-auth
+
+# Account
+echo $accpam | sudo tee -a /etc/pam.d/common-account
+
+# Password
+echo $sspam | sudo tee -a /etc/pam.d/common-password
+
+# Session
+echo $passpam | sudo tee -a /etc/pam.d/common-session
+
+
+# Configuración del archivo de configuración nsswitch.conf
+
+sudo sed -i "s|^passwd:.*|passwd: $compatldap|" "$nssconf"
+sudo sed -i "s|^group:.*|group: $compatldap|" "$nssconf"
+sudo sed -i "s|^shadow:.*|shadow: $compatldap|" "$nssconf"
+
+# Resultado de la configuración de nsswitch.conf
+
+echo "Configuración de nsswitch.conf"
+echo cat $nssconf
+
+
+echo "Todo en orden"
+
+
+
+
+
+
+
+
+
