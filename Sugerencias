@@ -1,4 +1,0 @@
-Preguntar si el usuario es root o no y si es root que suministre la contraseña. 
-Checkpoints por si queremos reanudar la instalación desde un punto seleccionado
-Después de introducir la información mostrar una pantalla con la información recogida en variables y preguntar si 
-hay algún error, si lo hay, reiniciar el script 
