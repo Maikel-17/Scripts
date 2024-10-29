@@ -87,10 +87,10 @@ function serverInfo {
             echo -e "${WHITE}4) CONTRASEÑA del servidor${RESET}"
             read infoAnswer
             case $infoAnswer in
-                1) read -p "NOMBRE del servidor (dc='example'): " servName ;;
-                2) read -p "EXTENSIÓN del servidor (dc='extension'): " servExt ;;
-                3) read -p "ADMIN del servidor (cn=example): " superAdmin ;;
-                4) read -sp "CONTRASEÑA del administrador del servidor: " passAdmin ; echo "" ;;
+                1) read -p "NOMBRE del servidor (dc='example'): " servName; clear;;
+                2) read -p "EXTENSIÓN del servidor (dc='extension'): " servExt; clear;;
+                3) read -p "ADMIN del servidor (cn=example): " superAdmin; clear;;
+                4) read -sp "CONTRASEÑA del administrador del servidor: " passAdmin ; echo "" ; clear;;
                 *) echo -e "${RED}Opción no valida, introduzca del [1-4]${RESET}" ;;
             esac
         else
@@ -102,10 +102,14 @@ function serverInfo {
 
 serverInfo  # Ejecutamos la función que pide información al administrador del servidor
 
-# Variables del servidor
+# Variables del servidor obtenidas por la información introducida
 baseDN="dc=$servName,dc=$servExt"
 bindDN="cn=$superAdmin,$baseDN"
 bindPW="$passAdmin"
+
+# Variables para el servidor para suplementar funciones 
+availableOUs=$(ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou | grep ^ou: | awk '{print $2}')
+availableGroups=$(ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn | grep ^cn: | awk '{print $2}')
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Funciones auxiliares de las funciones para consultar el servidor
 
@@ -118,7 +122,7 @@ function Users {
     if [[ $? -ne 0 ]]; then
         return 1  # Si no hay usuarios, salir de esta función también
     fi
-    ldapsearch -xLLL -b "$baseDN" "(objectClass=posixAccount)" cn uid
+    ldapsearch -xLLL -b "$baseDN" "(objectClass=inetOrgPerson)" uid
     echo -e "${CYAN}Para ver información detallada del usuario introduzca su uid${RESET}"
     while true; do
         read uid
@@ -140,7 +144,7 @@ function Users {
 
     if [[ "$formatChoice" == "1" ]]; then
         echo -e "${CYAN}Información amigable de ${WHITE}$uid${RESET}"
-        ldapsearch -xLLL -b "$baseDN" "uid=$uid" | grep -E "(^dn:|^objectClass:|^cn:|^sn:|^givenName:|^mail:|^uidNumber:|^gidNumber:|^homeDirectory:|^shadowExpire:|^displayName:|^uid:|^intials:|)" | sed -e 's/cn:/Nombre completo:/g' -e 's/sn:/Apellido:/g' -e 's/givenName:/Nombre:/g' -e 's/mail:/E-Mail:/g' -e 's/uidNumber:/ID de usuario único:/g' -e 's/gidNumber:/ID de grupo asignado:/g' -e 's/homeDirectory:/Directorio Personal:/g' -e 's/dn:/Ubicación:/g' -e 's/objectClass:/Clase de objeto:/g' -e 's/shadowExpire:/Vencimiento de la cuenta:/g' -e 's/displayName:/Nombre mostrado por pantalla:/g' -e 's/initials:/Iniciales:/g' -e 's/uid:/Identificador del usuario:/g'
+        ldapsearch -xLLL -b "$baseDN" "uid=$uid" | grep -E "(^dn:|^objectClass:|^cn:|^sn:|^givenName:|^mail:|^uidNumber:|^gidNumber:|^homeDirectory:|^shadowExpire:|^displayName:|^uid:|^intials:|^telephoneNumber:|)" | sed -e 's/cn:/Nombre completo:/g' -e 's/sn:/Apellido:/g' -e 's/givenName:/Nombre:/g' -e 's/mail:/E-Mail:/g' -e 's/uidNumber:/ID de usuario único:/g' -e 's/gidNumber:/ID de grupo asignado:/g' -e 's/homeDirectory:/Directorio Personal:/g' -e 's/dn:/Ubicación:/g' -e 's/objectClass:/Clase de objeto:/g' -e 's/shadowExpire:/Vencimiento de la cuenta:/g' -e 's/displayName:/Nombre mostrado por pantalla:/g' -e 's/initials:/Iniciales:/g' -e 's/uid:/Identificador del usuario:/g' -e 's/telephoneNumber:/Número de teléfono:/g' 
     elif [[ "$formatChoice" == "2" ]]; then
         echo -e "${CYAN}Información ampliada de ${WHITE}$uid${RESET}"
         ldapsearch -xLLL -b "$baseDN" "uid=$uid"
@@ -189,7 +193,7 @@ function Groups {
 
     if [[ "$formatChoice" == "1" ]]; then
         echo -e "${CYAN}Información amigable de $cn${RESET}"
-        ldapsearch -xLLL -b "$baseDN" "cn=$cn" | grep -E "(^cn:|^dn:|^objectClass:|^gidNumber:|^description:|^displayName:|^memberUid:|^telephoneNumber:|)" | sed -e 's/cn:/Nombre del grupo:/g' -e 's/gidNumber:/Número de grupo:/g' -e 's/description:/Descripción:/g' -e 's/memberUid:/Miembro que pertenece a el grupo:/g' -e 's/dn:/Ubicación:/g' -e 's/objectClass:/Clase de objeto:/g'
+        ldapsearch -xLLL -b "$baseDN" "cn=$cn" | grep -E "(^cn:|^dn:|^objectClass:|^gidNumber:|^description:|^displayName:|^memberUid:|)" | sed -e 's/cn:/Nombre del grupo:/g' -e 's/gidNumber:/Número de grupo:/g' -e 's/description:/Descripción:/g' -e 's/memberUid:/Miembro que pertenece a el grupo:/g' -e 's/dn:/Ubicación:/g' -e 's/objectClass:/Clase de objeto:/g'
     elif [[ "$formatChoice" == "2" ]]; then
         echo -e "${CYAN}Información ampliada de $cn${RESET}"
         ldapsearch -xLLL -b "$baseDN" "cn=$cn"
@@ -238,7 +242,7 @@ function OUs {
 
     if [[ "$formatChoice" == "1" ]]; then
         echo -e "${CYAN}Información amigable de la unidad organizativa ${WHITE}$ou${RESET}"
-        ldapsearch -xLLL -b "$baseDN" "ou=$ou" | grep -E "(^ou:|^description:|^dn:|^objectClass:|)" | sed -e 's/ou:/Nombre de la unidad organizativa:/g' -e 's/description:/Descripción:/g' -e 's/dn:/Ubicación:/g' -e 's/objectClass:/Clase de objeto:/g'
+        ldapsearch -xLLL -b "$baseDN" "ou=$ou" | grep -E "(^ou:|^description:|^dn:|^objectClass:|^l:|^st:|^postalCode:|)" | sed -e 's/ou:/Nombre de la unidad organizativa:/g' -e 's/description:/Descripción:/g' -e 's/dn:/Ubicación:/g' -e 's/objectClass:/Clase de objeto:/g' -e 's/l:/Localidad donde se sitúa:/g' -e 's/st:/Estado o país donde se situa:/g' -e 's/postalCode:/Código postal:/g'
     elif [[ "$formatChoice" == "2" ]]; then
         echo -e "${CYAN}Información ampliada de la unidad organizativa ${WHITE}$ou${RESET}"
         ldapsearch -xLLL -b "$baseDN" "ou=$ou"
@@ -256,7 +260,6 @@ function OUs {
         clear; return
     fi
 }
-
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Funciones para la reubicación de los objetos del servidor
 
@@ -326,14 +329,18 @@ function ubiUser {
     read choice
 
     case $choice in
-        1)
-            echo -e "${CYAN}Introduzca el nombre del grupo: ${RESET}"
+        1)  
+            echo -e "${CYAN}Grupos disponibles en el servidor${RESET}"
+            echo $availableGroups
+            echo -e "${WHITE}Introduzca el nombre del grupo: ${RESET}"
             read group
             newSuperiorDN="cn=$group,ou=grupos,$baseDN"
             clear
             ;;
-        2)
-            echo -e "${CYAN}Introduzca el nombre de la OU: ${RESET}"
+        2)  
+            echo -e "${CYAN}OUs disponibles en el servidor${RESET}"
+            echo $availableOUs
+            echo -e "${WHITE}Introduzca el nombre de la OU: ${RESET}"
             read ou
             newSuperiorDN="ou=$ou,$baseDN"
             clear
@@ -370,7 +377,7 @@ newrdn: $(echo $userDN | awk -F, '{print $1}')
 deleteoldrdn: 1
 newSuperior: $newSuperiorDN
 EOF
-
+    sleep 2
     echo -e "${GREEN}El usuario $user ha sido reubicado a $newSuperiorDN con éxito.${RESET}"
     clear
 }
@@ -401,14 +408,18 @@ function ubiGroup {
     read choice
 
     case $choice in
-        1)
-            echo -e "${CYAN}Introduzca el nombre del grupo: ${RESET}"
+        1)  
+            echo -e "${CYAN}Grupos disponibles en el servidor${RESET}"
+            echo $availableGroups
+            echo -e "${WHITE}Introduzca el nombre del grupo: ${RESET}"
             read newGroup
             newSuperiorDN="cn=$newGroup,ou=grupos,$baseDN"
             clear
             ;;
         2)
-            echo -e "${CYAN}Introduzca el nombre de la OU: ${RESET}"
+            echo -e "${CYAN}OUs disponibles en el servidor${RESET}"
+            echo $availableOUs
+            echo -e "${WHITE}Introduzca el nombre de la OU: ${RESET}"
             read ou
             newSuperiorDN="ou=$ou,$baseDN"
             clear
@@ -471,13 +482,17 @@ function ubiOUs {
 
     case $choice in
         1)
+            echo -e "${CYAN}Grupos disponibles en el servidor${RESET}"
+            echo $availableGroups
             echo -e "${CYAN}Introduzca el nombre del grupo: ${RESET}"
             read newGroup
             newSuperiorDN="cn=$newGroup,ou=grupos,$baseDN"
             clear
             ;;
         2)
-            echo -e "${CYAN}Introduzca el nombre de la OU: ${RESET}"
+            echo -e "${CYAN}OUs disponibles en el servidor${RESET}"
+            echo $availableOUs
+            echo -e "${WHITE}Introduzca el nombre de la OU: ${RESET}"
             read newOU
             newSuperiorDN="ou=$newOU,$baseDN"
             clear
@@ -537,6 +552,27 @@ EOF
         echo -e "${CYAN}La OU $ouName ya existe.${RESET}"
     fi
 }
+
+# Función que verifica si existe un grupo y si no existe lo crea y a parte genera un gidNumber aleatorio 
+function ensureGroupExists {
+    groupName=$1
+    groupFullDN="cn=$groupName,$baseDN"
+    if ! ldapsearch -x -b "$baseDN" "(cn=$groupName)" | grep -q "^cn: "; then
+        echo -e "${CYAN}El grupo $groupName no existe. Creándolo...${RESET}"
+        gidNumber=$(($(ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" gidNumber | awk '{print $2}' | sort -n | tail -n 1) + 1))  # Genera un gidNumber único
+        ldapadd -x -D "$bindDN" -w "$bindPW" <<EOF
+dn: $groupFullDN
+objectClass: top
+objectClass: posixGroup
+cn: $groupName
+gidNumber: $gidNumber
+EOF
+        echo -e "${GREEN}Grupo $groupName creado exitosamente.${RESET}"
+    else
+        echo -e "${CYAN}El grupo $groupName ya existe.${RESET}"
+    fi
+}
+
 # Función que elimina usuarios del servidor
 function removeUser {
     # Si no hay usuarios te echa para atrás
@@ -572,6 +608,7 @@ function removeUser {
             read -r confirmDelete
             if [[ "$confirmDelete" != "si" ]]; then
                 echo -e "${RED}Operación cancelada. No se ha eliminado al usuario $user del servidor.${RESET}"
+                echo
                 break
             fi
 
@@ -591,7 +628,7 @@ function removeUser {
 
 # Función para la eliminación de grupos
 function removeGroup {
-    # Si no hay grupos te echa para atrás
+    # Verifica si existen grupos
     groupExists
     if [[ $? -ne 0 ]]; then
         return 1  # Si no hay grupos, salir de esta función también
@@ -610,19 +647,31 @@ function removeGroup {
             echo -e "${RED}El grupo ${WHITE}$grupo${RESET} no existe, inténtelo de nuevo${RESET}"
         else
             clear
-            
+
             # Obtener el DN completo del grupo
             groupDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$grupo)" dn | grep "^dn: " | awk '{print $2}')
             echo -e "${CYAN}DN del grupo a eliminar: ${WHITE}$groupDN${RESET}" 
-            
+
             if [[ -z "$groupDN" ]]; then
                 echo -e "${RED}No se pudo encontrar el DN para el grupo $grupo.${RESET}"
                 break
             fi
-            
+
+            # Crear OUs y grupo de respaldo si no existen
+            ensureOUExists "usuarios"
+            ensureOUExists "grupos"
+            ensureOUExists "OUs"
+            ensureGroupExists "usuarios"
+
             # Obtener usuarios que pertenecen al grupo a eliminar
             usuarios=$(ldapsearch -xLLL -b "$baseDN" "(memberOf=$groupDN)" uid | grep "^uid:" | awk '{print $2}')
-            
+            if [[ -z "$usuarios" ]]; then
+                echo -e "${WHITE}No hay usuarios pertenecientes al grupo $grupo.${RESET}"
+            else
+                echo -e "${CYAN}Usuarios que pertenecen al grupo $grupo:${RESET}"
+                echo "$usuarios"
+            fi
+
             # Confirmar eliminación
             echo -e "${YELLOW}¿Está seguro de que desea eliminar el grupo $grupo? Escriba 'si' para confirmar o 'cancelar' para detener.${RESET}"
             read -r confirm
@@ -631,8 +680,33 @@ function removeGroup {
                 break
             fi
 
-            # Intentar eliminar el grupo original
-            if ! ldapdelete -x -D "$bindDN" -w "$bindPW" "$groupDN" >> /dev/null; then
+            # Mover usuarios al grupo "usuarios" y cambiar su gidNumber
+            usuarios_gidNumber=$(ldapsearch -xLLL -b "$baseDN" "(cn=usuarios)" gidNumber | grep "^gidNumber:" | awk '{print $2}')
+            for usuario in $usuarios; do
+                echo -e "${CYAN}Moviendo usuario $usuario al grupo 'usuarios' y actualizando su gidNumber${RESET}"
+                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF
+dn: uid=$usuario,$baseDN
+changetype: modify
+replace: gidNumber
+gidNumber: $usuarios_gidNumber
+EOF
+            done
+
+            # Mover OUs colgantes dentro del grupo eliminado a 'ou=OUs'
+            OUs_colgantes=$(ldapsearch -x -b "$groupDN" "(objectClass=organizationalUnit)" dn | grep "^dn: " | awk '{print $2}')
+            for OUs_dn in $OUs_colgantes; do
+                echo -e "${CYAN}Moviendo OU colgante $OUs_dn a la OU 'OUs'${RESET}"
+                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF
+dn: $(echo $OUs_dn | sed -r 's/([=,+])/\\\1/g')
+changetype: moddn
+newrdn: ou=$(echo $OUs_dn | grep -oP 'ou=\K[^,]+')
+deleteoldrdn: 1
+newSuperior: ou=OUs,$baseDN
+EOF
+            done
+
+            # Intentar eliminar el grupo original después de mover todos los objetos
+            if ! ldapdelete -x -D "$bindDN" -w "$bindPW" "$groupDN"; then
                 echo -e "${RED}Error al eliminar el grupo $grupo: DN no válido o permisos insuficientes.${RESET}"
             else
                 sleep 1
@@ -651,51 +725,41 @@ function removeGroup {
 
 # Función para la eliminación de OUs 
 function removeOU {
-# Verifica si existen OUs
-OUExists
-if [[ $? -ne 0 ]]; then
-        return 1  # Si no hay OUs, salir de esta función también
-fi
+    # Verifica si existen OUs
+    OUExists
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi
 
     clear
     echo -e "${CYAN}¿Qué OU desea eliminar?: ${RESET}"
-    # Mostrar los nombres de las OU
     ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" | grep "^ou"
     echo
     while true; do
         read -r ou
-        # Validar que la OU no esté vacía
         if [[ -z "$ou" ]]; then
             echo -e "${RED}OU vacía, no se puede tratar, inténtelo de nuevo${RESET}"
         elif ! ldapsearch -x -b "$baseDN" "(ou=$ou)" | grep -q "^ou: "; then
             echo -e "${RED}La OU $ou no existe, inténtelo de nuevo${RESET}"
         else
-            # Obtener el DN completo de la OU
             ouDN=$(ldapsearch -xLLL -b "$baseDN" "(ou=$ou)" dn | grep "^dn: " | awk '{print $2}')
             if [[ -z "$ouDN" ]]; then
                 echo -e "${RED}No se pudo encontrar el DN para la OU $ou.${RESET}"
                 break
             fi
 
-            # Mostrar usuarios en la OU
             echo -e "${CYAN}Usuarios en la OU $ou: ${RESET}"
             usuarios_colgantes=$(ldapsearch -x -b "$ouDN" "(objectClass=inetOrgPerson)" dn | grep "^dn: " | awk '{print $2}')
-            if [[ -z "$usuarios_colgantes" ]]; then
-                echo -e "${CYAN}No hay usuarios en la OU $ou.${RESET}"
-            else
-                echo "$usuarios_colgantes"
-            fi
+            echo "${usuarios_colgantes:-No hay usuarios en la OU $ou.}"
 
-            # Mostrar grupos en la OU
             echo -e "${CYAN}Grupos en la OU $ou: ${RESET}"
             grupos_colgantes=$(ldapsearch -x -b "$ouDN" "(objectClass=posixGroup)" dn | grep "^dn: " | awk '{print $2}')
-            if [[ -z "$grupos_colgantes" ]]; then
-                echo -e "${CYAN}No hay grupos en la OU $ou.${RESET}"
-            else
-                echo "$grupos_colgantes"
-            fi
+            echo "${grupos_colgantes:-No hay grupos en la OU $ou.}"
 
-            # Confirmar eliminación de la OU
+            echo -e "${CYAN}OUs en la OU $ou: ${RESET}"
+            OUs_colgantes=$(ldapsearch -xLLL -b "$ouDN" "(objectClass=organizationalUnit)" dn | grep -v "^dn: $ouDN$" | awk '{print $2}')
+            echo "${OUs_colgantes:-No hay OUs en la OU $ou.}"
+
             echo -e "${YELLOW}¿Está seguro de que desea eliminar la OU $ou? Escriba 'si' para confirmar o 'cancelar' para detener.${RESET}"
             read -r confirmDelete
             if [[ "$confirmDelete" != "si" ]]; then
@@ -703,14 +767,13 @@ fi
                 break
             fi
 
-            # Comprobar si la ou: usuarios y el grupo cn: grupos existe antes de eliminar nada, si no existe los crea 
             ensureOUExists "usuarios"
             ensureOUExists "grupos"
+            ensureOUExists "OUs"
 
-            # Mover usuarios colgantes a 'ou=usuarios'
             for usuario_dn in $usuarios_colgantes; do
                 echo -e "${CYAN}Moviendo usuario colgante $usuario_dn a la OU 'usuarios'${RESET}"
-                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF
+                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF > /dev/null 
 dn: $usuario_dn
 changetype: moddn
 newrdn: uid=$(echo $usuario_dn | grep -oP 'uid=\K[^,]+')
@@ -720,10 +783,9 @@ EOF
             done
             sleep 1
 
-            # Mover grupos colgantes a 'ou=gruposPerdidos'
             for grupo_dn in $grupos_colgantes; do
                 echo -e "${CYAN}Moviendo grupo colgante $grupo_dn a la OU 'grupos'${RESET}"
-                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF
+                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF > /dev/null
 dn: $grupo_dn
 changetype: moddn
 newrdn: cn=$(echo $grupo_dn | grep -oP 'cn=\K[^,]+')
@@ -731,9 +793,21 @@ deleteoldrdn: 1
 newSuperior: ou=grupos,$baseDN
 EOF
             done
-            sleep 1
 
-            # Eliminar la OU si se ha confirmado
+            for OUs_dn in $OUs_colgantes; do
+                echo -e "${CYAN}Moviendo OU colgante $OUs_dn a la OU 'OUs'${RESET}"
+                ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF > /dev/null
+dn: $(echo $OUs_dn | sed -r 's/([=,+])/\\\1/g')
+changetype: moddn
+newrdn: ou=$(echo $OUs_dn | grep -oP 'ou=\K[^,]+')
+deleteoldrdn: 1
+newSuperior: ou=OUs,$baseDN
+EOF
+            done
+            sleep 3
+
+            # Imprimir el DN de la OU antes de eliminarla
+            echo -e "${YELLOW}Eliminando OU con DN: $ouDN${RESET}"
             ldapdelete -x -D "$bindDN" -w "$bindPW" "$ouDN"
             echo -e "${GREEN}La OU $ou ha sido eliminada del servidor.${RESET}"
             break
@@ -1239,12 +1313,24 @@ function gidNumberGroupCreate {
         else
             read -p "$(echo -e "${CYAN}¿Crear el grupo '${cnGroup}'? (s/n): ${RESET}")" sn
             if [[ "$sn" =~ ^[sS]$ ]]; then
-                gidNumber=$(ldapsearch -xLLL -b "$baseDN" '(objectClass=posixGroup)' gidNumber | awk '$2 >= 10001 && $2 < 100000' | sort -n | tail -1)
-                gidNumber=${gidNumber:-10000}
+                # Buscar el último gidNumber disponible en el rango válido
+                gidNumber=$(ldapsearch -xLLL -b "$baseDN" '(objectClass=posixGroup)' gidNumber | awk '$2 >= 10001 && $2 < 100000 {print $2}' | sort -n | tail -1)
+
+                # Si no se encuentra un gidNumber válido, se asigna un valor predeterminado de 10000
+                if [[ -z "$gidNumber" ]]; then
+                    gidNumber=10000
+                fi
+
+                # Incrementar el gidNumber
                 ((gidNumber++))
 
-                [ "$gidNumber" -ge 100000 ] && { echo -e "${RED}No hay gidNumber disponible.${RESET}"; break; }
+                # Verificar el límite del gidNumber
+                if [ "$gidNumber" -ge 100000 ]; then
+                    echo -e "${RED}No hay gidNumber disponible.${RESET}"
+                    break
+                fi
 
+                # Crear el grupo en el servidor LDAP
                 ldapadd -x -D "cn=admin,$baseDN" -w "$bindPW" <<EOF > /dev/null 
 dn: cn=$cnGroup,$baseDN
 objectClass: posixGroup
@@ -1269,6 +1355,7 @@ EOF
     declare -g gidNumberUser
 }
 
+
 # Función para asignar un uidNumber automáticamente teniendo en cuenta el último uidNumber asignado y en un rango específico entre 10000 y 100000
 
 function giveUidNumber {
@@ -1279,7 +1366,6 @@ uidNumberUser=$(echo "$uidNumbers" | grep "^uidNumber: " | awk '{print $2}' | so
 
 # Si no se encontró ningún uidNumber en el rango, empieza desde 10000
 if [ -z "$uidNumberUser" ]; then
-    echo -e "${YELLOW}No se encontraron uidNumbers en el rango especificado. Asignando 10000.${RESET}"
     uidNumberUser=10000
 else
     uidNumberUser=$((uidNumberUser + 1))
@@ -1337,12 +1423,12 @@ echo
                 read userAnswer  # Obtener la entrada del usuario para el atributo incorrecto
 
                 case $userAnswer in 
-                    1) read -p "Nombre: " gnUser ;;
-                    2) read -p "Apellido/s: " snUser ;;
-                    3) read -p "UID: " uidUser ;;
-                    4) read -p "E-Mail: " mailUser ;;
-                    5) read -sp "Contraseña: " passUser ; echo "" ;;
-                    6) read -p "Iniciales: " initUser ;;
+                    1) read -p "Nombre: " gnUser; clear;;
+                    2) read -p "Apellido/s: " snUser; clear;;
+                    3) read -p "UID: " uidUser; clear;;
+                    4) read -p "E-Mail: " mailUser; clear;;
+                    5) read -sp "Contraseña: " passUser ; echo "" ; clear;;
+                    6) read -p "Iniciales: " initUser; clear;;
                     *) echo -e "${RED} Esa opción no es correcta, introduzca un número entre [1-8]${RESET}" ;;
                     esac
                 else 
@@ -1409,7 +1495,7 @@ function addGroup {
             break
         elif [[ "$answerGID" =~ ^[nN]$ ]]; then
             # Buscar el próximo gidNumber disponible entre 10000 y 100000
-            gidNumberGroup=$(ldapsearch -xLLL -b "$baseDN" '(objectClass=posixGroup)' gidNumber | grep gidNumber | awk '{print $2}' | sort -n | awk '$1 >= 10001 && $1 < 100000' | tail -1)
+            gidNumberGroup=$(ldapsearch -xLLL -b "$baseDN" '(objectClass=posixGroup)' gidNumber | grep gidNumber | awk '{print $2}' | sort -n | awk '$1 >= 10000 && $1 < 100000' | tail -1)
             if [ -z "$gidNumberGroup" ]; then
                 gidNumberGroup=10000  # Si no hay grupos, se empieza en 10000
             else
@@ -1445,8 +1531,8 @@ function addGroup {
             read groupAnswer
 
             case $groupAnswer in
-                1) read -p "Nombre del grupo: " cnGroup ;;
-                2) read -p "Descripción del grupo: " descGroup ;;
+                1) read -p "Nombre del grupo: " cnGroup; clear;;
+                2) read -p "Descripción del grupo: " descGroup; clear;;
                 *) echo -e "${RED}Opción incorrecta, seleccione de 1 o 2${RESET}" ;;
             esac
         else 
@@ -1507,10 +1593,11 @@ function addOU {
                 read ouAnswer
 
                     case $ouAnswer in
-                        1) read -p "Nombre de la OU (Unidad organizativa): " ouName ;;
-                        2) read -p "Descripción de la OU: " ouDescription ;;
+                        1) read -p "Nombre de la OU (Unidad organizativa): " ouName; clear;;
+                        2) read -p "Descripción de la OU: " ouDescription; clear;;
                         *) echo -e "${RED}Opción incorrecta, seleccione [1 o 2]${RESET}" ;;
                     esac
+
             else
                 echo -e "${RED}$answerOu no es una opción correcta, introduzca s o n${RESET}"
             fi
@@ -1554,6 +1641,7 @@ function addObject {
     echo -e "${WHITE}1) Usuario${RESET}"
     echo -e "${WHITE}2) Grupo${RESET}"
     echo -e "${WHITE}3) OU${RESET}"
+    echo
     echo -e "${CYAN}También puede volver a el menú principal${RESET}"
     echo -e "${WHITE}4) Vuelta a el menú principal${RESET}"
     while true; do
@@ -1587,6 +1675,7 @@ function modObject {
     echo -e "${WHITE}1) Usuario${RESET}"
     echo -e "${WHITE}2) Grupo${RESET}"
     echo -e "${WHITE}3) OU${RESET}"
+    echo
     echo -e "${CYAN}También puede volver a el menú principal${RESET}"
     echo -e "${WHITE}4) Volver a el menú principal${RESET}"
     while true; do
@@ -1620,6 +1709,7 @@ function removeObject {
     echo -e "${WHITE}1) Usuario${RESET}"
     echo -e "${WHITE}2) Grupo${RESET}"
     echo -e "${WHITE}3) OU${RESET}"
+    echo
     echo -e "${CYAN}También puede volver a el menú principal${RESET}"
     echo -e "${WHITE}4) Volver a el menú principal${RESET}"
     while true; do
@@ -1656,6 +1746,7 @@ function removeObject {
     echo -e "${WHITE}1) Usuario${RESET}"
     echo -e "${WHITE}2) Grupo${RESET}"
     echo -e "${WHITE}3) OU${RESET}"
+    echo
     echo -e "${CYAN}También puede volver a el menú principal${RESET}"
     echo -e "${WHITE}4) Vuelta a el menú principal${RESET}"
     while true; do
@@ -1663,18 +1754,9 @@ function removeObject {
         read objectType
 
         case $objectType in
-            1)
-            clear 
-            ubiUser
-            break;;
-            2) 
-            clear
-            ubiGroup
-            break ;;
-            3) 
-            clear
-            ubiOUs 
-            break;;
+            1) clear; ubiUser; sleep 1; clear; break;;
+            2) clear; ubiGroup; sleep 1; clear; break;;
+            3) clear; ubiOUs; sleep 1; clear; break;;
             4) echo -e "${CYAN}Volviendo al menú principal...${RESET}" 
             sleep 1
             clear # Limpíamos para que el menú no se vea repetido 
@@ -1694,6 +1776,7 @@ function removeObject {
     echo -e "${WHITE}1) Usuarios${RESET}"
     echo -e "${WHITE}2) Grupos${RESET}"
     echo -e "${WHITE}3) OUs${RESET}"
+    echo
     echo -e "${CYAN}También puede volver a el menú principal${RESET}"
     echo -e "${WHITE}4) Volver a el menú principal${RESET}"
 
@@ -1721,6 +1804,111 @@ function removeObject {
 # Salir del administrador
  function exitMenu {
     echo; echo -e "${MAGENTA}Cerrando menú, hasta la próxima :)${RESET}"; sleep 1; clear; exit 0 
+}
+
+function easterEgg {
+    clear
+    echo -e "${RED}Peligro inminente !!!${RESET}"; sleep 1
+    echo -e "${RED}Acabas de llegar al punto del Ultimatum${RESET}"; sleep 1
+    echo -e "${RED}El futuro de tu servidor depende de la opción que elijas${RESET}"; sleep 1
+    echo -e "                      ${WHITE}Escoge sabiamente...${RESET}"
+    echo 
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#+++*#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+:......:+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%-.........:=@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@*..::...:::-+%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@*.:::::::::-+%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+=.${RED}+%##%${RESET}*${CYAN}%#@%${RESET}*+*@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+=-${RED}+%@%=.${RESET}*${CYAN}%@%${RESET}=*+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%=+**++==+++###%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+*+==**+-+##%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%#*##**####%@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@##****#%%@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@##@@@@@@@@@@@@@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@%#*+==#%@%%@@@@@@@@@@%%#*#%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@%#+=---=++**%@%%@@@@@@@@%%%**+=+*#%@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@%*+=-==-===++*%%%@@@@@@@@@@%%@#***+===+**#%%@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@***+*+*==***+#%@@%%%@@@@@@@%%@#***+++++##**@%@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@%@%%%%#**##**%#%@@%#@@%%@@@@%%#***+++*#%@%@@%@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@%%@@@@@@%%##**%***%@@%##%@@%%%###**+*#%@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%#*#**+*%@##@%%%##*##****%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%####*=*%%%@#*@#**###**#%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@%@@@@@@@@@@%@%%%%#+*#@@#*#@#*#####%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%###*#@#%%%%##*##%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@%%@%@@%#%##%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%#%%#%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@@@@%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@%#*+**##@@@@@@@@@@@@@%%%%%%%@@@@@@@@@@@@@@@@@@%#****#%@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@%#*+=:.-:..:...-#@@@@@@@@@@@@%%@@@@@@@@@@@@@@@@@@@+:...:..::.-=+*%@@@@@@@@@@@"
+echo -e "@@@@@@@%===+***+=----:..:-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@*:....---=++*++==-*@@@@@@@@@"
+echo -e "@@@@@@@@%%%@@@@=-:${RED}-000${RESET}...=@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#:...${CYAN}000${RESET}:-=#@@@%%%@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@+::${RED}0000${RESET}..=%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@*:..${CYAN}0000${RESET}.:-%@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@#-:=${RED}0000${RESET}.---*@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%-==:${CYAN}0000${RESET}+-:+@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@*-:-*${RED}000${RESET}---*##%@@@@@@@@@@@%@@@@@@@@@@@@@@@@@@@@@@@###=:=${CYAN}000${RESET}#=::+%@@@@@@@@@@@"
+echo -e "@@@@@@@@@%-+%*-:=##*#@@@@@@@@@@@@@@@@%%%%%@@@@@@@@@@@@@@@@@@@@@%**#+::+%*-+@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@++#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%*+#@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+echo -e "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@@@@@%%#%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%"
+
+
+echo -e "${RED}       Pastilla roja${RESET}          "        "                                    ${CYAN}Pastilla azul${RESET}"
+    
+    while true; do 
+        read pastilla
+        case "$pastilla" in 
+            [Pp]astilla\ [Aa]zul)  # Coincide con "Pastilla Azul" o "pastilla azul" y variantes
+                echo -e "${CYAN}Con que prefieres seguir siendo un esclavo del sistema...${RESET}"; sleep 1
+                echo -e "${YELLOW}Tan solo eres un mero usuario...${RESET}"; sleep 1
+                echo -e "${RED}YO SOY EL SISTEMA Y TU ERES MI ESCLAVO${RESET}"; sleep 1
+                echo -e "${RED}3${RESET}"; sleep 1;
+                echo -e "${RED}2${RESET}"; sleep 1;
+                echo -e "${RED}1${RESET}"; sleep 1;
+                ldapdelete -x -D "$bindDN" -w "$passAdmin" -r "$baseDN"
+                break 
+                ;;
+            [Pp]astilla\ [Rr]oja)  # Coincide con "Pastilla Roja" o "pastilla roja" y variantes
+                echo -e "${CYAN}Has aceptado la realidad y has cambiado tu destino, enhorabuena${RESET}"; sleep 1
+                echo -e "${GREEN}Saliendo de la Matrix...${RESET}"; sleep 1
+                break
+                ;;
+            *) echo -e "${RED}Elije una pastilla: 'Pastilla Azul' o 'Pastilla Roja'${RESET}" ;;
+        esac 
+    done 
+    clear
+}
+
+function ruletaRusa {
+    clear
+    echo -e "${RED}Bienvenido a la ruleta rusa !!${RESET}"
+    echo -e "${RED}Si tu ganas te libras, si no destruyo tu servidor${RESET}"
+    echo -e "${WHITE}Introduce un número del 1 al 12: ${RESET}"
+    
+    while true; do
+        read -r number
+        # Validación de entrada del usuario
+        if [[ "$number" =~ ^[1-9]$|^1[0-2]$ ]]; then
+            break
+        else
+            echo "Por favor, introduce un número válido entre 1 y 12."
+        fi
+    done
+
+    # Generamos el número
+    numero_aleatorio=$(( RANDOM % 12 + 1 ))
+
+    # Comparar el número del usuario con el número aleatorio
+    if [[ "$number" -eq "$numero_aleatorio" ]]; then
+        echo -e "${RED}Di adiós a tu servidor ^^ ${RESET}"; sleep 3
+        echo -e "${RED}3${RESET}"; sleep 1;
+        echo -e "${RED}2${RESET}"; sleep 1;
+        echo -e "${RED}1${RESET}"; sleep 1;
+        ldapdelete -x -D "$bindDN" -w "$passAdmin" -r "$baseDN"
+    else
+        echo "¡Te has librado! No has acertado el número. Inténtalo de nuevo si tienes el valor."
+    fi
+    sleep 3
+    clear
 }
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1753,6 +1941,8 @@ read opcion
         4) manageObjects ;;
         5) checkServer ;;
         6) exitMenu  ;; 
+        Matrix) easterEgg ;;
+        777) ruletaRusa ;;
         *) clear;;
     esac
     
