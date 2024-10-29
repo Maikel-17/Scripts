@@ -2,19 +2,23 @@
 
 # Nombre script: Union.sh
 # Descripción: Script para la configuración y agregación de un cliente a un servidor OPEN LDAP
-# Autor:
+# Autor: Miguel Hernández Andreu 
 # Fecha creación: 14/10/24
-# Fecha finalización: */10/24
+# Fecha finalización: 18/10/24
 
 # ------------------ Definición de colores para texto ------------------
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
+BLACK='\033[1;30m'
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
+MAGENTA='\033[1;35m'
+CYAN='\033[1;36m'
+WHITE='\033[1;37m'
 RESET='\033[0m'
 
 # -------------------------- Cabecera LDAPUnion ------------------------------
-
+echo "                                                                               "
+echo "                                                                               "
 echo "██╗     ██████╗  █████╗ ██████╗       ██╗   ██╗███╗   ██╗██╗ ██████╗ ███╗   ██╗"
 echo "██║     ██╔══██╗██╔══██╗██╔══██╗      ██║   ██║████╗  ██║██║██╔═══██╗████╗  ██║"
 echo "██║     ██║  ██║███████║██████╔╝█████╗██║   ██║██╔██╗ ██║██║██║   ██║██╔██╗ ██║"
@@ -22,226 +26,265 @@ echo "██║     ██║  ██║██╔══██║██╔══�
 echo "███████╗██████╔╝██║  ██║██║           ╚██████╔╝██║ ╚████║██║╚██████╔╝██║ ╚████║"
 echo "╚══════╝╚═════╝ ╚═╝  ╚═╝╚═╝            ╚═════╝ ╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝"
 
-echo -e "${YELLOW}								Script made by: Mike17 ${RESET}"
+echo -e "${CYAN}								Developed by: Miguel Hernández ${RESET}"
 
 echo 
 
-# ------------------ Check previo para ejecutar script como root ----------------
+# ------------------ Check previo para ejecutar script como root -----------------
+
+# Si el usuario que está ejecutando el script no es root sale del script 
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}Este script debe ejecutarse como root${RESET}"
    exit 1
 fi
 
-
-# ------------------ Actualizar y mejorar repositorios ---------------------------
-
-while true; do
-    echo -e "${YELLOW}¿Actualizar repositorios a la última versión? (s/n): ${RESET}"
-    read answer
-    answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]') # Convertir a minúsculas
-
-    if [[ "$answer" == "s" ]]; then 
-        echo -e "${YELLOW}Actualizando repositorios, espere...${RESET}"
-        if sudo apt update -y; then
-            echo -e "${GREEN}Repositorios actualizados correctamente.${RESET}"
-        else
-            echo -e "${RED}Error al actualizar los repositorios.${RESET}"
-            break  # Salir si hay un error
-        fi
-
-        while true; do 
-            echo -e "${YELLOW}¿Deseas también hacer un upgrade de los paquetes? (s/n): ${RESET}"
-            read answerUpgrade
-            answerUpgrade=$(echo "$answerUpgrade" | tr '[:upper:]' '[:lower:]')
-
-            if [[ "$answerUpgrade" == "s" ]]; then 
-                echo -e "${YELLOW}Actualizando paquetes, espere...${RESET}"
-                if sudo apt upgrade -y; then
-                    echo -e "${GREEN}Paquetes actualizados correctamente.${RESET}"
-                else
-                    echo -e "${RED}Error al actualizar los paquetes.${RESET}"
-                fi
-                break  # Rompemos el bucle después de hacer upgrade
-
-            elif [[ "$answerUpgrade" == "n" ]]; then
-                echo -e "${GREEN}Omitiendo el upgrade de los paquetes.${RESET}"
-                sleep 1
-                echo -e "${GREEN}Continuando con la instalación...${RESET}"
-                break  # Rompemos el bucle de actualización
-
-            else 
-                echo -e "${RED}Entrada no válida. Por favor responde con 's' para sí o 'n' para no.${RESET}"
-            fi
-        done
-
-        break  # Salimos del bucle principal después de actualizar
-
-    elif [[ "$answer" == "n" ]]; then
-        echo -e "${GREEN}Omitiendo la actualización de los repositorios.${RESET}"
-        sleep 1
-        echo -e "${GREEN}Continuando con la instalación...${RESET}"
-        break  # Salimos del bucle principal
-
-    else 
-        echo -e "${RED}Entrada no válida. Por favor responde con 's' para sí o 'n' para no.${RESET}"
-    fi
-done
-
-
-
-# ------------------ Preguntar si el servidor y cliente están en la misma red ------------------
-while true; do
-	echo -e "${YELLOW}¿El servidor y el cliente están en la misma red? (s/n): ${RESET}"  
-	read respuesta
-	respuesta=$(echo "$respuesta" | tr '[:upper:]' '[:lower:]')  # Convertir a minúsculas
-
-	if [[ "$respuesta" == "s" ]]; then
-    	echo -e "${GREEN}Continuando con la configuración...${RESET}"
-    	break  # Salir del bucle
-
-	elif [[ "$respuesta" == "n" ]]; then
-    	echo -e "${YELLOW}Por favor asegúrate de que el servidor y el cliente estén en la misma red antes de continuar.${RESET}"
-    	exit 1  # Salir del script con un código de error
-
-	else
-    	echo -e "${RED}Por favor responde con 's' para sí o 'n' para no.${RESET}"  # Manejo de entrada no válida
-	fi
-done
-
+# ------------------ Actualizar repositorios ---------------------------
+echo -e "${CYAN}Actualizando repositorios...${RESET}"
+sudo apt update -y 
+sleep 2	
 echo
 
 # ------------------ Solicitar IP o nombre del servidor LDAP ------------------
-while [[ ! "$serverDomain" =~ ^[a-zA-Z0-9.-]+$ ]]; do
-    echo -e "${YELLOW}Por favor introduce la IP o nombre del host del servidor${RESET}: "
+
+function ask4uri {
+# Nos pregunta por la dirección IP o el nombre del dominio
+# Si no cumple con la condicón vuelve a preguntar hasta que introduzcamos un valor correcto
+while true; do
+    echo -e "${CYAN}Por favor introduce la IP o nombre del host del servidor:${RESET} "
     read serverDomain
 
-    if [[ ! "$serverDomain" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    # Hace una validación que permite ingresar tanto IPs como nombres de dominio
+    if [[ "$serverDomain" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        break  # Entrada válida
+    else
         echo -e "${RED}Formato inválido. Debe ser una IP o un nombre de host válido.${RESET}"
-        serverDomain=""  # Limpiar la variable si no es válida
     fi
 done
+}
+# ------------------ Ping a el servidor para comprobar si es alcanzable ------------------
 
-# ------------------ Solicitar el DN del servidor ------------------
+function pingURI {
 
-# Solicitar el nombre del servidor (primer 'dc=')
-while [[ ! "$serverName" =~ ^[a-zA-Z0-9]+$ ]]; do
-    echo -e "${YELLOW}Por favor introduce el nombre del servidor (Ejemplo: 'example' para dc=example):${RESET}"
+    echo -e "${CYAN}Comprobando conexión con el servidor $serverDomain...${RESET}"
+    ping -c 4 "$serverDomain" >> /dev/null  # Comprobamos si nuestro cliente ve al servidor
+	
+	if [[ $? -eq 0 ]]; then 
+		echo -e "${GREEN}Conexión exitosa, continuando con la instalación...${RESET}"
+	else 
+		echo -e "${RED}Ha habido un problema con la conexión, por favor revise su configuración de red antes de continuar${RESET}"
+		exit 1
+	fi
+	
+	echo 
+}
+# ------------------ Solicitar el nombre del dominio (primer 'dc=') ------------------
+
+function serverName {
+# Pregunta por el nombre del servidor es decir el primer dc
+# Si no cumple con la condicón vuelve a preguntar hasta que introduzcamos un valor correcto
+while true; do
+    echo -e "${CYAN}Por favor introduce el nombre del dominio. (Ejemplo: dc='example')${RESET}"
     read serverName
 
-    if [[ ! "$serverName" =~ ^[a-zA-Z0-9]+$ ]]; then
+    # La validación se encarga de comprobar que no se introduzcan carácteres especiales que puedan provocar turbulencias
+    if [[ "$serverName" =~ ^[a-zA-Z0-9]+$ ]]; then
+        break  # Entrada válida
+    else
         echo -e "${RED}Nombre de servidor inválido. Solo puedes usar letras y números.${RESET}"
-        serverName=""
-    fi
-done
-
-# Solicitar la extensión del dominio (segundo 'dc=')
-while [[ ! "$extServ" =~ ^[a-zA-Z]{2,}$ ]]; do
-    echo -e "${YELLOW}Por favor introduce la extensión del dominio (Ejemplo: 'com', 'org', 'net'):${RESET}"
-    read extServ
-
-    if [[ ! "$extServ" =~ ^[a-zA-Z]{2,}$ ]]; then
-        echo -e "${RED}Extensión inválida. Solo se permiten letras y debe tener al menos 2 caracteres.${RESET}"
-        extServ=""
     fi
 done
 
 echo
 
+}
+# ------------------ Solicitar la extensión del dominio (segundo 'dc=') ------------------
+
+function serverExt {
+# Pregunta por la extensión del servidor es decir el primer dc
+# Si no cumple con la condicón vuelve a preguntar hasta que introduzcamos un valor correcto
+while true; do
+    echo -e "${CYAN}Por favor introduce la extensión del dominio (Ejemplo: 'com', 'org', 'net'):${RESET}"
+    read extServ
+    # Esta validación pide como mínimo dos carácteres y solo permite introducir letras 
+    if [[ "$extServ" =~ ^[a-zA-Z]{2,}$ ]]; then
+        break  # Entrada válida
+    else
+        echo -e "${RED}Extensión inválida. Solo se permiten letras y debe tener al menos 2 caracteres.${RESET}"
+    fi
+done
+
+echo
+
+}
 # ------------------ Solicitar el CN del administrador de LDAP ------------------
 
-while [[ ! "$adminName" =~ ^[a-zA-Z0-9._-]+$ ]]; do
-    echo -e "${YELLOW}Por favor introduce el nombre del administrador LDAP (Ejemplo: 'admin' para cn=admin):${RESET}"
+function serverAdmin {
+# Pregunta por el nombre del administrador del servidor
+# Si no cumple con la condicón vuelve a preguntar hasta que introduzcamos un valor correcto
+while true; do
+    echo -e "${CYAN}Por favor introduce el nombre del administrador LDAP (Ejemplo: 'admin' para cn=admin):${RESET}"
     read adminName
-
-    if [[ ! "$adminName" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    # Esta validación se encarga de que el nombre del administrador no contenga carácteres extraños
+    if [[ "$adminName" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        break  # Entrada válida
+    else
         echo -e "${RED}Nombre de administrador inválido. Solo puedes usar letras, números, puntos (.), guiones bajos (_) y guiones (-).${RESET}"
-        adminName=""
     fi
 done
 
 echo
-
+}
 # ------------------ Solicitar contraseña del administrador de LDAP ------------------
 
+function serverPass {
+# Pregunta por el nombre del administrador del servidor
+# Si no cumple con la condicón vuelve a preguntar hasta que introduzcamos un valor correcto
 while true; do
-	echo -e "${YELLOW}Por favor proporcione una contraseña para el usuario administrador de LDAP: ${RESET}"
-	read PassLDAP
-	echo  # Nueva línea
 
-	if [[ -z "$PassLDAP" ]]; then
-    	echo -e "${RED}La contraseña no puede estar vacía. Inténtalo de nuevo.${RESET}"
-	else
-    	echo -e "${GREEN}Contraseña aceptada.${RESET}"
-    	break  # Contraseña válida, salir del bucle
-	fi
+    echo -e "${CYAN}Por favor proporcione una contraseña para el usuario administrador de LDAP: ${RESET}"
+    read -s PassLDAP  # Leer la contraseña sin mostrarla
+    echo  # Nueva línea
+    # Si la contraseña está vacia nos pide que introduzcamos de nuevo
+    if [[ -z "$PassLDAP" ]]; then
+        echo -e "${RED}La contraseña no puede estar vacía. Inténtalo de nuevo.${RESET}"
+    else
+        echo -e "${GREEN}Contraseña aceptada.${RESET}"
+        break  # Contraseña válida, salir del bucle
+    fi
 done
 
-echo
+}
+
+# Iniciamos funciones
+ask4uri
+pingURI
+serverName
+serverExt
+serverAdmin
+serverPass
+
+clear 
 
 # ------------------ BLOQUE DE CONTROL PARA VERIFICAR INFORMACIÓN INTRODUCIDA ------------------------
 
-echo -e "${CYAN}Información introducida por el usuario${RESET}"
+function controlInfo {
+echo -e "${CYAN}Información introducida por el usuario:${RESET}"
+echo "URI Dirección del servidor LDAP: $serverDomain"
+echo "BASE BASE del servidor LDAP: $serverName"
+echo "Extensión del dominio: $extServ"
+echo "Nombre de administrador: $adminName"
+echo "La contraseña no es mostrada por motivos de seguridad, si cree que ha tecleado mal repítalo."
+}
 
-echo "$URI Dirección del servidor LDAP"
-echo "$BASE BASE del servidor LDAP"
-echo "$CnServer ADMIN del servidor LDAP"
-echo "$CnDnServer DN completo del servidor LDAP"
+controlInfo
+sleep 2
 
-sleep 5
+# ------------------ Confirmación de la información introducida ------------------------
+while true; do
+    echo -e "${CYAN}¿Es esta información correcta? (s/n): ${RESET}"
+    read infoAnswer
 
-echo -e "${YELLOW}¿Es esta información correcta? (s/n): ${RESET}"
-read infoAnswer
+    if [[ "$infoAnswer" =~ ^[Ss]$ ]]; then
+        echo -e "${GREEN}Continuando con la instalación...${RESET}"
+        break  # Salir del bucle principal si la información es correcta
 
-if [[ "$infoAnswer" =~ ^[Ss]$ ]]; then
-    echo -e "${GREEN}Continuando con la instalación...${RESET}"
-    
-elif 
-    [[ "$infoAnswer" =~ ^[Nn]$ ]]; then
-    echo -e "Vuelva a iniciar el script."
-    exit 1
-fi
+    elif [[ "$infoAnswer" =~ ^[Nn]$ ]]; then
+        echo -e "${CYAN}Por favor, introduce nuevamente los campos que deseas corregir.${RESET}"
+       
+        while true; do
+            echo -e "${CYAN}¿Qué campo deseas corregir? (1: IP/Dominio, 2: Nombre, 3: Extensión, 4: Administrador, 5: Contraseña): ${RESET}"
+            read fieldChoice
 
+            case "$fieldChoice" in
+                1)
+                    ask4uri
+                    ;;
+                2)
+                    serverName
+                    ;;
+                3)
+                    serverExt
+                    ;;
+                4)
+                    serverAdmin
+                    ;;
+                5)
+                    serverPass
+                    ;;
+                *)
+                    echo -e "${RED}Opción no válida. Por favor elige un número entre 1 y 5.${RESET}"
+                    continue  # Vuelve a preguntar por el campo
+                    ;;
+            esac
 
+            # Se muestra información de nuevo para comprobar si la información ha sido reintroducida correctamente
+            controlInfo
+                       
+            break  # Salimos del bucle de corrección para volver al bucle principal
+        done
+    else
+        echo -e "${RED}Opción no válida, responda con 'sS' o 'nN'.${RESET}"
+    fi
+done
 
 # ------------------ Variables de configuración LDAP ------------------
 
+# Variables definidas por el usuario - Estas variables son usadas en varias partes del script, para la configuración de varias partes
 URI="ldap://$serverDomain" 			# URL del servidor
 BASE="dc=$serverName,dc=$extServ"   # BASE del servidor
 CnServer="cn=$adminName"       		# ADMIN del servidor
 CnDnServer="$CnServer,$BASE"  		# Unión del CN y el DN
-LDAPVersion=3						# Versión de LDAP
-varlibconf="/etc/ldap/ldap.conf" 	# Ruta del archivo de configuración de LDAP
-varlibconf2="/etc/ldap.conf"		# Ruta del archivo de configuración LDAP de libnss-ldap
-filesldap="files ldap"				# Texto para sustituir en nsswitch.conf
-nssconf="/etc/nsswitch.conf"		# Ruta del fichero nsswitch.conf
 
+
+# Variables para introducir información en ficheros
 # Conf PAM
 authpam="auth sufficient  pam_ldap.so" 								 # Línea de texto añadida a auth
 accpam="account sufficient  pam_ldap.so" 							 # Línea de texto añadida a account
 sspam="session required  pam_mkhomedir.so skel=/etc/skel umask=0077" # Línea de texto añadida a session
 passpam="password sufficient pam_ldap.so" 							 # Línea de texto añadida a password
 
+# Conf nsswitch.conf
+filesldap="files ldap"				# Texto para sustituir en nsswitch.conf
+
+# Conf ldap.conf
+LDAPVersion=3						# Versión de LDAP
+
+# Variables con rutas de ficheros
+varlibconf="/etc/ldap/ldap.conf" 	# Ruta del archivo de configuración de LDAP
+varlibconf2="/etc/ldap.conf"		# Ruta del archivo de configuración LDAP de libnss-ldap
+nssconf="/etc/nsswitch.conf"		# Ruta del fichero nsswitch.conf
+nslcdconf="/etc/nslcd.conf"  		# Ruta del archivo de configuración de nslcd
+
+
 # ------------------ Actualización de repositorios e instalación de dependencias ------------------
-echo -e "${YELLOW}Instalando librerias LDAP, espere por favor...${RESET}"
+clear
+echo -e "${CYAN}Instalando librerias LDAP, espere por favor...${RESET}"
 
-# Actualizar repositorios e instalar las librerías necesarias
-sudo DEBIAN_FRONTEND=noninteractive apt install -y libnss-ldap libpam-ldap ldap-utils 
+sudo DEBIAN_FRONTEND=noninteractive apt install -y libnss-ldap libpam-ldap ldap-utils nslcd
+				# Instalamos nslcd para acceder por interfaz gráfica
 
-echo -e "${GREEN}Instalación completada.${RESET}"
+if [[ $? -eq 0 ]]; then 
+    echo -e "${GREEN}Instalación completada.${RESET}"
+else 
+    echo -e "${RED}Ha habido un problema con la instalación${RESET}"
+    exit 1
+fi
+
+sleep 2 # Retrasamos el script 
 
 # ------------------ Configuración del archivo /etc/ldap/ldap.conf ------------------
 
 # Evitar duplicados en la configuración
 if ! grep -q "^URI $URI" "$varlibconf"; then
-	sudo sed -i '/^#URI/s/^#//;s|URI.*|URI  '"$URI"'|' "$varlibconf"
+	sudo sed -i '/^#URI/s/^#//;s|URI.*|URI  '"$URI"'|' "$varlibconf" > /dev/null
 fi
 
 if ! grep -q "^BASE $BASE" "$varlibconf"; then
-	sudo sed -i '/^#BASE/s/^#//;s|dc=example,dc=com|'"$BASE"'|' "$varlibconf"
+	sudo sed -i '/^#BASE/s/^#//;s|dc=example,dc=com|'"$BASE"'|' "$varlibconf" > /dev/null
 fi
 
 if ! grep -q "^LDAP_VERSION" "$varlibconf"; then
-	sudo sed -i '/^URI/a LDAP_VERSION 3' "$varlibconf"
+	sudo sed -i '/^URI/a LDAP_VERSION 3' "$varlibconf" > /dev/null
 fi
 
 # ------------------ Configuración del archivo /etc/ldap.conf ------------------
@@ -291,65 +334,15 @@ if ! grep -q "^$sspam" "/etc/pam.d/common-session"; then
 fi
 
 # ------------------ Configuración de nsswitch.conf ------------------
-sudo sed -i "s|^passwd:.*|passwd: $filesldap|" "$nssconf"
-sudo sed -i "s|^group:.*|group: $filesldap|" "$nssconf"
-sudo sed -i "s|^shadow:.*|shadow: $filesldap|" "$nssconf"
+sudo sed -i "s|^passwd:.*|passwd: $filesldap|" "$nssconf" > /dev/null
+sudo sed -i "s|^group:.*|group: $filesldap|" "$nssconf" > /dev/null
+sudo sed -i "s|^shadow:.*|shadow: $filesldap|" "$nssconf" > /dev/null
 
-# Mostrar configuración final del archivo nsswitch.conf
-echo -e "${CYAN}Resultado de la configuración de nsswitch.conf:${RESET}"
-sudo cat $nssconf
-
-echo
-
-# ------------------ Verificación de la configuración ------------------
-echo -e "${GREEN}Todo instalado y configurado correctamente.${RESET}"
-echo "Conectando con DN: $CnDnServer"
-echo
-sleep 2
-echo "Base de búsqueda: $BASE"
-echo
-
-# ------------------ Verificación de conexión LDAP ------------------
-echo -e "${YELLOW}Verificando conexión al servidor LDAP...${RESET}"
-
-ldapsearch -x -D "$CnDnServer" -W -b "$BASE"
-if [[ $? -eq 0 ]]; then
-    echo -e "${GREEN}Conexión LDAP exitosa.${RESET}"
-else
-    echo -e "${RED}Error en la conexión LDAP. Verifica la configuración.${RESET}"
-    exit 1
-fi
-
-# Preguntar al cliente el uid de un usuario para verificar la configuración
-echo -e "${CYAN}Para verificar la unión, introduzca el uid de un usuario: ${RESET}" 
-sleep 1
-read uiduserldap 
-echo
-
-
-# Obtener la información del usuario del servidor LDAP
-sudo getent passwd "$uiduserldap"
-echo
-
-# -------------------------- INSTALACIÓN NSLCD ----------------------------------
-
-read -p "¿Desea instalar nslcd para acceder a LDAP gráficamente? (s/n): " instNslcd
-if [[ "$instNslcd" =~ ^[Ss]$ ]]; then
-    # ------------------ Instalación de nslcd ------------------
-    echo -e "${YELLOW}Instalando nslcd, espere por favor...${RESET}"
-
-    # Actualizar repositorios e instalar nslcd
-    sudo DEBIAN_FRONTEND=noninteractive apt install -y nslcd 
-
-    echo -e "${GREEN}El servicio nslcd ha sido instalado correctamente.${RESET}"
-
-    # ------------------ Configuración de /etc/nslcd.conf ------------------
-    echo -e "${YELLOW}Configurando nslcd...${RESET}"
-
-    nslcdconf="/etc/nslcd.conf"  # Ruta del archivo de configuración de nslcd
-
+# ------------------ Configuración de /etc/nslcd.conf ------------------
+    echo -e "${CYAN}Configurando nslcd...${RESET}"
+	
     # Crear o modificar el archivo de configuración nslcd.conf
-    cat <<EOL | sudo tee "$nslcdconf"
+    cat <<EOL | sudo tee "$nslcdconf" > /dev/null
 # Configuración de nslcd
 uri ldap://$serverDomain
 base $BASE
@@ -357,7 +350,7 @@ binddn $CnDnServer
 bindpw $PassLDAP
 # Opciones de búsqueda
 scope sub
-# Configuración de caché (ajusta según tus necesidades)
+# Configuración de caché 
 # Uncomment to enable caching
 # cache credential
 # cache group
@@ -365,55 +358,50 @@ scope sub
 # cache shadow
 EOL
 
-    echo -e "${GREEN}Archivo /etc/nslcd.conf configurado correctamente.${RESET}"
+echo -e "${GREEN}Archivo /etc/nslcd.conf configurado correctamente.${RESET}"
 
-    # ------------------ Reiniciar el servicio nslcd ------------------
-    echo -e "${YELLOW}Reiniciando el servicio nslcd...${RESET}"
-    sudo systemctl restart nslcd
+# Reiniciamos el servicio y comprobamos si se ha reiniciado
+sudo systemctl restart nslcd > /dev/null
 
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}nslcd reiniciado correctamente.${RESET}"
     else
-        echo -e "${RED}Error al reiniciar nslcd. Verifica la configuración.${RESET}"
-        exit 1
+        echo -e "${RED}Error al reiniciar nslcd...${RESET}"
     fi
+	
+# Habilitar el servicio nslcd para que inicie al arrancar
+sudo systemctl enable nslcd > /dev/null
 
-    # Habilitar el servicio nslcd para que inicie al arrancar
-    echo -e "${YELLOW}Habilitando el servicio nslcd para que inicie al arrancar...${RESET}"
-    sudo systemctl enable nslcd
-    echo -e "${GREEN}Servicio nslcd habilitado correctamente.${RESET}"
+# ------------------ Verificación de conexión LDAP ------------------
+echo -e "${CYAN}Verificando conexión al servidor LDAP...${RESET}"
+sleep 2
+ldapsearch -x -D "$CnDnServer" -W -b "$BASE" >> /dev/null
+if [[ $? -eq 0 ]]; then
+    echo -e "${GREEN}Conexión LDAP exitosa.${RESET}"
 else
-    echo -e "${YELLOW}Opción de instalación de nslcd omitida.${RESET}"
+    echo -e "${RED}Error en la conexión LDAP. Verifica la configuración.${RESET}"
+    exit 1
 fi
 
+# Preguntar al cliente el uid de un usuario para verificar la configuración 
+echo -e "${CYAN}Para verificar la unión, introduzca el uid de un usuario del servidor: ${RESET}" 
+sleep 1
 
-# ----------------- Acceso a el sistema como usuario del servidor ------------------
-echo -e "${CYAN}¿Acceder a el sistema como cliente LDAP? (Interfaz de comando) (s/n) ${RESET}: "
-read comAccess
+while true; do
+read uiduserldap 
+echo
+# Obtener la información del usuario del servidor LDAP, si es correcta inicia sesión, si no existe vuelve a preguntar por otro usuario.
+sudo getent passwd "$uiduserldap" >> /dev/null 
 
-if [[ "$comAccess" =~ ^[Ss]$ ]]; then
-    echo -e "${CYAN}Porfavor introduzca el UID de algún usuario del servidor: ${RESET}"
-    read uiduserldap
-
+if [[ $? -eq 0 ]]; then
     echo -e "${GREEN}Accediendo a el sistema como $uiduserldap... ${RESET}"
     sleep 2
     su - $uiduserldap
+    break
 
 else 
-    echo -e "${GREEN}Continuando con la instalación... ${RESET}"
+    echo -e "${RED}El usuario introducido no existe, intentalo de nuevo...${RESET}"
+    sleep 1 
 fi
 
-
-# ------------------ Fichero que almacena las variables para comprobación -----------------
-
-sudo touch /var/tmp/varuser.txt # Creamos el archivo en temp
-
-cat << EOL > "/var/tmp/varuser.txt" 
-
-# Archivo que contiene las variables introducidas en la instalación
-URI=$URI
-BASE=$BASE
-CnServer=$CnServer
-encryptedPass=$(echo -n "$PassLDAP" | openssl dgst -sha256)
-CnDnServer=$CnDnServer
-EOL
+done
