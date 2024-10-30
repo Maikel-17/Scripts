@@ -107,9 +107,6 @@ baseDN="dc=$servName,dc=$servExt"
 bindDN="cn=$superAdmin,$baseDN"
 bindPW="$passAdmin"
 
-# Variables para el servidor para suplementar funciones 
-availableOUs=$(ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou | grep ^ou: | awk '{print $2}')
-availableGroups=$(ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn | grep ^cn: | awk '{print $2}')
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Funciones auxiliares de las funciones para consultar el servidor
 
@@ -302,61 +299,51 @@ EOF
     clear
 }
 
-# Función para reubicar un usuario
 function ubiUser {
-    userExists # Comprobamos si existen usuarios o no
+    userExists
     if [[ $? -ne 0 ]]; then
-        return 1  # Si no hay grupos, salir de esta función también
+        return 1
     fi
+
     echo -e "${CYAN}Usuarios del servidor: ${RESET}"
     ldapsearch -xLLL -b "$baseDN" "(objectClass=posixAccount)" cn
     echo
     echo -e "${CYAN}Introduzca el CN del usuario que quiere reubicar: ${RESET}"
     read user
 
-    # Obtener el DN del usuario
     userDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$user)" dn | grep "^dn: " | awk '{print $2}')
     if [[ -z "$userDN" ]]; then
         echo -e "${RED}No se pudo encontrar el DN para el usuario $user.${RESET}"
         return
     fi
 
-    echo -e "${CYAN}¿Donde quiere reubicar el usuario?${RESET}"
-    echo -e "${WHITE}1) Grupo (Introduzca el nombre del grupo)${RESET}"
-    echo -e "${WHITE}2) Unidad Organizativa (Introduzca el nombre de la OU)${RESET}"
+    echo -e "${CYAN}¿Dónde quiere reubicar el usuario?${RESET}"
+    echo -e "${WHITE}1) Grupo (Mostrar DN y permitir elección)${RESET}"
+    echo -e "${WHITE}2) Unidad Organizativa (Mostrar DN y permitir elección)${RESET}"
     echo -e "${WHITE}3) Raíz del servidor${RESET}"
     echo -e "${WHITE}4) Cambiar de grupo (gidNumber)${RESET}"
     read choice
 
     case $choice in
-        1)  
-            echo -e "${CYAN}Grupos disponibles en el servidor${RESET}"
-            echo $availableGroups
+        1)
+            echo -e "${CYAN}Grupos disponibles en el servidor:${RESET}"
+            ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn dn
             echo -e "${WHITE}Introduzca el nombre del grupo: ${RESET}"
             read group
-            newSuperiorDN="cn=$group,ou=grupos,$baseDN"
-            sleep 1
-            clear
+            newSuperiorDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$group)" dn | grep "^dn: " | awk '{print $2}')
             ;;
-        2)  
-            echo -e "${CYAN}OUs disponibles en el servidor${RESET}"
-            echo $availableOUs
+        2)
+            echo -e "${CYAN}OUs disponibles en el servidor:${RESET}"
+            ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou dn
             echo -e "${WHITE}Introduzca el nombre de la OU: ${RESET}"
             read ou
-            newSuperiorDN="ou=$ou,$baseDN"
-            sleep 1
-            clear
+            newSuperiorDN=$(ldapsearch -xLLL -b "$baseDN" "(ou=$ou)" dn | grep "^dn: " | awk '{print $2}')
             ;;
         3)
             newSuperiorDN="$baseDN"
-            sleep 1
-            clear
             ;;
         4)
-            # Llamar a la función changeGidNumber con el CN del usuario como parámetro
             changeGidNumber "$user"
-            sleep 1
-            clear
             return
             ;;
         *)
@@ -365,7 +352,6 @@ function ubiUser {
             ;;
     esac
 
-    # Confirmar reubicación del usuario
     echo -e "${YELLOW}¿Está seguro de que desea reubicar el usuario $user a $newSuperiorDN? Escriba 'si' para confirmar o 'cancelar' para detener.${RESET}"
     read -r confirmMove
     if [[ "$confirmMove" != "si" ]]; then
@@ -373,16 +359,18 @@ function ubiUser {
         return
     fi
 
-    # Mover el usuario
-    ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF >> /dev/null 
+    ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF >> /dev/null
 dn: $userDN
 changetype: moddn
 newrdn: $(echo $userDN | awk -F, '{print $1}')
 deleteoldrdn: 1
 newSuperior: $newSuperiorDN
 EOF
-    sleep 2
-    echo -e "${GREEN}El usuario $user ha sido reubicado a $newSuperiorDN con éxito.${RESET}"
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}El usuario $user ha sido reubicado a $newSuperiorDN con éxito.${RESET}"
+    else
+        echo -e "${RED}Error al reubicar el usuario $user.${RESET}"
+    fi
     clear
 }
 
@@ -392,6 +380,7 @@ function ubiGroup {
     if [[ $? -ne 0 ]]; then
         return 1  # Si no hay grupos, salir de esta función también
     fi
+
     echo -e "${CYAN}Grupos del servidor: ${RESET}"
     ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn
     echo
@@ -406,35 +395,31 @@ function ubiGroup {
     fi
 
     echo -e "${CYAN}¿Dónde quiere reubicar el grupo?${RESET}"
-    echo -e "${WHITE}1) Grupo (Introduzca el nombre del grupo)${RESET}"
-    echo -e "${WHITE}2) Unidad Organizativa (Introduzca el nombre de la OU)${RESET}"
+    echo -e "${WHITE}1) Grupo (Mostrar DN y permitir elección)${RESET}"
+    echo -e "${WHITE}2) Unidad Organizativa (Mostrar DN y permitir elección)${RESET}"
     echo -e "${WHITE}3) Raíz del servidor${RESET}"
     read choice
 
     case $choice in
-        1)  
-            echo -e "${CYAN}Grupos disponibles en el servidor${RESET}"
-            echo $availableGroups
+        1)
+            echo -e "${CYAN}Grupos disponibles en el servidor:${RESET}"
+            ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn dn
             echo -e "${WHITE}Introduzca el nombre del grupo: ${RESET}"
             read newGroup
-            newSuperiorDN="cn=$newGroup,ou=grupos,$baseDN"
-            clear
+            newSuperiorDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$newGroup)" dn | grep "^dn: " | awk '{print $2}')
             ;;
         2)
-            echo -e "${CYAN}OUs disponibles en el servidor${RESET}"
-            echo $availableOUs
+            echo -e "${CYAN}OUs disponibles en el servidor:${RESET}"
+            ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou dn
             echo -e "${WHITE}Introduzca el nombre de la OU: ${RESET}"
             read ou
-            newSuperiorDN="ou=$ou,$baseDN"
-            clear
+            newSuperiorDN=$(ldapsearch -xLLL -b "$baseDN" "(ou=$ou)" dn | grep "^dn: " | awk '{print $2}')
             ;;
         3)
             newSuperiorDN="$baseDN"
-            clear
             ;;
         *)
             echo -e "${RED}Opción no válida. Inténtelo de nuevo.${RESET}"
-            clear
             return
             ;;
     esac
@@ -447,7 +432,7 @@ function ubiGroup {
         return
     fi
 
-    # Mover el grupo
+    # Mover el grupo, asegurando que el DN esté bien formado
     ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF >> /dev/null
 dn: $groupDN
 changetype: moddn
@@ -455,16 +440,20 @@ newrdn: $(echo $groupDN | awk -F, '{print $1}')
 deleteoldrdn: 1
 newSuperior: $newSuperiorDN
 EOF
-
-    echo -e "${GREEN}El grupo $group ha sido reubicado a $newSuperiorDN con éxito.${RESET}"
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}El grupo $group ha sido reubicado a $newSuperiorDN con éxito.${RESET}"
+    else
+        echo -e "${RED}Error al reubicar el grupo $group.${RESET}"
+    fi
 }
 
 # Función para reubicar OUs en el servidor 
 function ubiOUs {
     OUExists
     if [[ $? -ne 0 ]]; then
-        return 1  # Si no hay grupos, salir de esta función también
+        return 1  # Si no hay OUs, salir de esta función también
     fi
+
     echo -e "${CYAN}OUs del servidor: ${RESET}"
     ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou
     echo
@@ -479,35 +468,31 @@ function ubiOUs {
     fi
 
     echo -e "${CYAN}¿Dónde quiere reubicar la OU?${RESET}"
-    echo -e "${WHITE}1) Grupo (Introduzca el nombre del grupo)${RESET}"
-    echo -e "${WHITE}2) OU (Introduzca el nombre de la OU)${RESET}"
+    echo -e "${WHITE}1) Grupo (Mostrar DN y permitir elección)${RESET}"
+    echo -e "${WHITE}2) OU (Mostrar DN y permitir elección)${RESET}"
     echo -e "${WHITE}3) Raíz del servidor${RESET}"
     read choice
 
     case $choice in
         1)
-            echo -e "${CYAN}Grupos disponibles en el servidor${RESET}"
-            echo $availableGroups
-            echo -e "${CYAN}Introduzca el nombre del grupo: ${RESET}"
+            echo -e "${CYAN}Grupos disponibles en el servidor:${RESET}"
+            ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn dn
+            echo -e "${WHITE}Introduzca el nombre del grupo: ${RESET}"
             read newGroup
-            newSuperiorDN="cn=$newGroup,$baseDN"
-            clear
+            newSuperiorDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$newGroup)" dn | grep "^dn: " | awk '{print $2}')
             ;;
-        2) 
-            echo -e "${CYAN}OUs disponibles en el servidor${RESET}"
-            echo $availableOUs
+        2)
+            echo -e "${CYAN}OUs disponibles en el servidor:${RESET}"
+            ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou dn
             echo -e "${WHITE}Introduzca el nombre de la OU: ${RESET}"
             read newOU
-            newSuperiorDN="ou=$newOU,$baseDN"
-            clear
+            newSuperiorDN=$(ldapsearch -xLLL -b "$baseDN" "(ou=$newOU)" dn | grep "^dn: " | awk '{print $2}')
             ;;
         3)
             newSuperiorDN="$baseDN"
-            clear
             ;;
         *)
             echo -e "${RED}Opción no válida. Inténtelo de nuevo.${RESET}"
-            clear
             return
             ;;
     esac
@@ -520,7 +505,7 @@ function ubiOUs {
         return
     fi
 
-    # Mover la OU
+    # Mover la OU, asegurando que el DN esté bien formado
     ldapmodify -x -D "$bindDN" -w "$bindPW" <<EOF >> /dev/null
 dn: $ouDN
 changetype: moddn
@@ -528,8 +513,11 @@ newrdn: $(echo $ouDN | awk -F, '{print $1}')
 deleteoldrdn: 1
 newSuperior: $newSuperiorDN
 EOF
-
-    echo -e "${GREEN}La OU $ou ha sido reubicada a $newSuperiorDN con éxito.${RESET}"
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}La OU $ou ha sido reubicada a $newSuperiorDN con éxito.${RESET}"
+    else
+        echo -e "${RED}Error al reubicar la OU $ou.${RESET}"
+    fi
 }
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -595,60 +583,62 @@ function removeGroup {
     if [[ $? -ne 0 ]]; then
         return 1  # Si no hay grupos, salir de esta función
     fi
-
-    echo -e "${CYAN}¿Qué grupo desea eliminar?: ${RESET}"
+    clear
+    echo -e "${CYAN}¿Qué grupo desea eliminar? Introduzca su CN: ${RESET}"
     # Mostrar los nombres de los grupos
-    ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" | grep "^cn:"
+    ldapsearch -xLLL -b "$baseDN" "(objectClass=posixGroup)" cn
     echo
 
     while true; do
-        read -r grupo
+        read -r group
         # Validar que el grupo no esté vacío
-        if [[ -z "$grupo" ]]; then
-            echo -e "${RED}Grupo vacío, no se puede tratar, inténtelo de nuevo${RESET}"
-        elif ! ldapsearch -x -b "$baseDN" "(cn=$grupo)" | grep -q "^cn: "; then
-            echo -e "${RED}El grupo ${WHITE}$grupo${RESET} no existe, inténtelo de nuevo${RESET}"
+        if [[ -z "$group" ]]; then
+            echo -e "${RED}El grupo no puede estar vacío, inténtelo de nuevo${RESET}"
+        elif ! ldapsearch -x -b "$baseDN" "(cn=$group)" | grep -q "^cn: "; then
+            echo -e "${RED}El grupo $group no existe, inténtelo de nuevo${RESET}"
         else
-            clear
-
             # Obtener el DN completo del grupo
-            groupDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$grupo)" dn | grep "^dn: " | awk '{print $2}')
-            echo -e "${CYAN}DN del grupo a eliminar: ${WHITE}$groupDN${RESET}"
-
+            groupDN=$(ldapsearch -xLLL -b "$baseDN" "(cn=$group)" dn | grep "^dn: " | awk '{print $2}')
             if [[ -z "$groupDN" ]]; then
-                echo -e "${RED}No se pudo encontrar el DN para el grupo $grupo.${RESET}"
+                echo -e "${RED}No se pudo encontrar el DN para el grupo $group.${RESET}"
                 break
             fi
 
-            # Obtener usuarios que pertenecen al grupo a eliminar
-            usuarios=$(ldapsearch -xLLL -b "$baseDN" "(memberOf=$groupDN)" uid | grep "^uid:" | awk '{print $2}')
-            echo -e "${CYAN}Usuarios que pertenecen al grupo $grupo:${RESET}"
-            echo "${usuarios:-No hay usuarios pertenecientes al grupo $grupo.}"
+            # Mostrar usuarios, grupos y OUs en el grupo
+            echo -e "${CYAN}Usuarios en el grupo $group: ${RESET}"
+            usuarios_colgantes=$(ldapsearch -x -b "$groupDN" "(objectClass=inetOrgPerson)" dn | grep "^dn: " | awk '{print $2}')
+            [[ -z "$usuarios_colgantes" ]] && echo -e "${WHITE}No hay usuarios en el grupo $group.${RESET}" || echo "$usuarios_colgantes"
 
-            # Obtener subgrupos que tienen a este grupo como padre
-            subgrupos=$(ldapsearch -x -b "$baseDN" "(&(objectClass=posixGroup)(memberOf=$groupDN))" dn | grep "^dn: " | awk '{print $2}')
-            echo -e "${CYAN}Subgrupos dentro del grupo $grupo:${RESET}"
-            echo "${subgrupos:-No hay subgrupos dentro del grupo $grupo.}"
+            # Mostrar grupos en el grupo, excluyendo el propio grupo
+            echo -e "${CYAN}Grupos en el grupo $group: ${RESET}"
+            grupos_colgantes=$(ldapsearch -x -b "$groupDN" "(&(objectClass=posixGroup)(!(cn=$group)))" dn | grep "^dn: " | awk '{print $2}')
+            [[ -z "$grupos_colgantes" ]] && echo -e "${WHITE}No hay grupos en el grupo $group.${RESET}" || echo
 
-            # Obtener OUs dentro del grupo
-            OUs_colgantes=$(ldapsearch -x -b "$groupDN" "(objectClass=organizationalUnit)" | grep "^dn: " | awk '{print $2}')
-            echo -e "${CYAN}OUs dentro del grupo $grupo:${RESET}"
-            echo "${OUs_colgantes:-No hay OUs dentro del grupo $grupo.}"
+            echo -e "${CYAN}OUs en el grupo $group: ${RESET}"
+            OUs_colgantes=$(ldapsearch -x -b "$groupDN" "(objectClass=organizationalUnit)" dn | grep "^dn: " | awk '{print $2}')
+            [[ -z "$OUs_colgantes" ]] && echo -e "${WHITE}No hay OUs en el grupo $group.${RESET}" || echo "$OUs_colgantes"
 
-            # Verificar si hay objetos hijos
-            if [[ -z "$usuarios" && -z "$subgrupos" && -z "$OUs_colgantes" ]]; then
-                # Si no hay objetos, proceder a eliminar el grupo
-                echo -e "${GREEN}El grupo $grupo está vacío y se eliminará.${RESET}"
-                if ldapdelete -x -D "$bindDN" -w "$bindPW" "$groupDN"; then
-                    echo -e "${GREEN}El grupo $grupo ha sido eliminado con éxito.${RESET}"
+            # Confirmar eliminación del grupo
+            echo -e "${YELLOW}¿Está seguro de que desea eliminar el grupo $group? Escriba 'si' para confirmar o 'cancelar' para detener.${RESET}"
+            read -r confirmDelete
+            if [[ "$confirmDelete" != "si" ]]; then
+                echo -e "${RED}Operación cancelada. No se ha eliminado el grupo $group.${RESET}"
+                break
+            fi
+
+            # Verificar si hay objetos colgantes
+            if [[ -z "$usuarios_colgantes" ]] && [[ -z "$grupos_colgantes" ]] && [[ -z "$OUs_colgantes" ]]; then
+                # Eliminar el grupo si se ha confirmado
+                ldapdelete -x -D "$bindDN" -w "$bindPW" "$groupDN"
+                if [[ $? -eq 0 ]]; then
+                    echo -e "${GREEN}El grupo $group ha sido eliminado del servidor.${RESET}"
                 else
-                    echo -e "${RED}Error al eliminar el grupo $grupo: DN no válido o permisos insuficientes.${RESET}"
+                    echo -e "${RED}Error al eliminar el grupo $group.${RESET}"
                 fi
             else
-                # Mensaje de advertencia antes de eliminar
-                echo -e "${YELLOW}Antes de eliminar el grupo $grupo, elimine o redistribuya los objetos hijos.${RESET}"
+                echo -e "${RED}El grupo $group contiene objetos. No se puede eliminar hasta que todos los objetos hayan sido movidos o eliminados.${RESET}"
             fi
-            break  # Salir del bucle
+            break
         fi
     done
     repeatAction
@@ -669,50 +659,63 @@ function removeOU {
     fi
 
     clear
-    echo -e "${CYAN}¿Qué OU desea eliminar?: ${RESET}"
-    ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" | grep "^ou:"
+    echo -e "${CYAN}¿Qué OU desea eliminar? (Introduzca su ou (Nombre)): ${RESET}"
+    
+    # Mostrar los nombres de las OU
+    ldapsearch -xLLL -b "$baseDN" "(objectClass=organizationalUnit)" ou
     echo
 
     while true; do
         read -r ou
+        
+        # Validar que la OU no esté vacía
         if [[ -z "$ou" ]]; then
-            echo -e "${RED}OU vacía, no se puede tratar, inténtelo de nuevo${RESET}"
+            echo -e "${RED}La OU no puede estar vacía, inténtelo de nuevo${RESET}"
         elif ! ldapsearch -x -b "$baseDN" "(ou=$ou)" | grep -q "^ou: "; then
             echo -e "${RED}La OU $ou no existe, inténtelo de nuevo${RESET}"
         else
+            # Obtener el DN completo de la OU
             ouDN=$(ldapsearch -xLLL -b "$baseDN" "(ou=$ou)" dn | grep "^dn: " | awk '{print $2}')
             if [[ -z "$ouDN" ]]; then
                 echo -e "${RED}No se pudo encontrar el DN para la OU $ou.${RESET}"
                 break
             fi
 
-            # Obtener usuarios en la OU
+            # Mostrar usuarios, grupos y OUs en la OU
             echo -e "${CYAN}Usuarios en la OU $ou: ${RESET}"
             usuarios_colgantes=$(ldapsearch -x -b "$ouDN" "(objectClass=inetOrgPerson)" dn | grep "^dn: " | awk '{print $2}')
-            echo "${usuarios_colgantes:-No hay usuarios en la OU $ou.}"
+            [[ -z "$usuarios_colgantes" ]] && echo -e "${WHITE}No hay usuarios en la OU $ou.${RESET}" || echo "$usuarios_colgantes"
 
-            # Obtener grupos en la OU
             echo -e "${CYAN}Grupos en la OU $ou: ${RESET}"
             grupos_colgantes=$(ldapsearch -x -b "$ouDN" "(objectClass=posixGroup)" dn | grep "^dn: " | awk '{print $2}')
-            echo "${grupos_colgantes:-No hay grupos en la OU $ou.}"
+            [[ -z "$grupos_colgantes" ]] && echo -e "${WHITE}No hay grupos en la OU $ou.${RESET}" || echo "$grupos_colgantes"
 
-            # Obtener OUs hijas dentro de la OU seleccionada, excluyendo la propia OU
-            echo -e "${CYAN}OUs hijas dentro de la OU $ou: ${RESET}"
-            ous_hijas=$(ldapsearch -x -b "$ouDN" -s one "(objectClass=organizationalUnit)" dn | grep "^dn: " | awk '{print $2}')
-            echo "${ous_hijas:-No hay OUs hijas dentro de la OU $ou.}"
+            echo -e "${CYAN}OUs en la OU $ou: ${RESET}"
+            OUs_colgantes=$(ldapsearch -x -b "$ouDN" "(&(objectClass=organizationalUnit)(!(ou=$ou)))" dn | grep "^dn: " | awk '{print $2}')
+            [[ -z "$OUs_colgantes" ]] && echo -e "${WHITE}No hay OUs en la OU $ou.${RESET}" || echo "$OUs_colgantes"
 
-            # Verificar si hay objetos hijos
-            if [[ -n "$usuarios_colgantes" || -n "$grupos_colgantes" || -n "$ous_hijas" ]]; then
-                # Si hay objetos, mostrar advertencia
-                echo -e "${YELLOW}Antes de eliminar la OU $ou, elimine o redistribuya los objetos hijos.${RESET}"
-            else
-                if ldapdelete -x -D "$bindDN" -w "$bindPW" "$ouDN"; then
-                    echo -e "${GREEN}La OU $ou ha sido eliminada con éxito.${RESET}"
-                else
-                    echo -e "${RED}Error al eliminar la OU $ou: DN no válido o permisos insuficientes.${RESET}"
-                fi
+
+            # Confirmar eliminación de la OU
+            echo -e "${YELLOW}¿Está seguro de que desea eliminar la OU $ou? Escriba 'si' para confirmar o 'cancelar' para detener.${RESET}"
+            read -r confirmDelete
+            if [[ "$confirmDelete" != "si" ]]; then
+                echo -e "${RED}Operación cancelada. No se ha eliminado la OU $ou.${RESET}"
+                break
             fi
-            break  # Salir del bucle
+
+            # Verificar si hay objetos colgantes
+            if [[ -z "$usuarios_colgantes" ]] && [[ -z "$grupos_colgantes" ]] && [[ -z "$OUs_colgantes" ]]; then
+                # Eliminar la OU si se ha confirmado
+                ldapdelete -x -D "$bindDN" -w "$bindPW" "$ouDN"
+                if [[ $? -eq 0 ]]; then
+                    echo -e "${GREEN}La OU $ou ha sido eliminada del servidor.${RESET}"
+                else
+                    echo -e "${RED}Error al eliminar la OU $ou.${RESET}"
+                fi
+            else
+                echo -e "${RED}La OU $ou contiene objetos. No se puede eliminar hasta que todos los objetos hayan sido movidos o eliminados.${RESET}"
+            fi
+            break
         fi
     done
     repeatAction
@@ -1287,7 +1290,7 @@ echo
  function addUser {
     clear
     # Solicitamos información acerca del objeto usuario
-    echo -e "${CYAN}Ingrese la información para el nuevo usuario${RESET}"
+    echo -e "${CYAN}Ingrese la información para el nuevo usuario: (No dejar campos en blanco)${RESET}"
     read -p "Nombre: " gnUser
     read -p "Apellido/s: " snUser
     read -p "UID: " uidUser
@@ -1299,6 +1302,7 @@ echo
     # Agregar uidNumber 
     giveUidNumber
     # Solicitar gidNumber del grupo
+    echo -e "${CYAN}Asignar gidNumber: ${RESET}"
     gidNumberGroupCreate
 
         while true; do 
@@ -1381,7 +1385,7 @@ EOF
 function addGroup {
     clear
     # Solicitar información del grupo
-    echo -e "${CYAN}Ingrese la información del nuevo grupo${RESET}"
+    echo -e "${CYAN}Ingrese la información del nuevo grupo (No dejar campos en blanco)${RESET}"
     read -p "Nombre del grupo: " cnGroup
     read -p "Descripción del grupo: " descGroup
     echo ""
@@ -1473,7 +1477,7 @@ EOF
 function addOU {
         clear
             # Solicitar información de la OU
-            echo -e "${CYAN}Ingrese información para la nueva OU${RESET}"
+            echo -e "${CYAN}Ingrese información para la nueva OU (No dejar campos en blanco)${RESET}"
             read -p "Nombre de la OU (Unidad organizativa): " ouName
             read -p "Descripción de la OU: " ouDescription
 
@@ -1849,5 +1853,3 @@ read opcion
     esac
     
 done 
-
-
